@@ -5,25 +5,25 @@ from lib import *
 # Config section
 
 # Count of bees per iteration
-bees_count = 5
+bees_count = 1
 
 # Max scouting retries before finishing algorithm iteration 
-max_retries_count = 10
+max_retries_count = 20
 
 # Number of clients located on field
-clients_count = 5
+clients_count = 20
 
 # Number of clients are possible to connect to single basic station
-bs_max_clients_count = 50
+bs_max_clients_count = 100
 
 # Basic station working area radius
-bs_area_radius = 100
+bs_area_radius = 3
 
 # Field width
-field_width = 100000
+field_width = 15
 
 # Field height
-field_height = 100000
+field_height = 15
 
 # Y-coord which field height starts with
 start_height_pos = 0
@@ -49,13 +49,35 @@ field = field(field_width, field_height, start_width_pos, start_height_pos, log)
 clients_list = field.generate_clients_list(clients_count)
 
 # Initialize 'hive' instance
-hive = hive(field, log)
+hive = hive(field, bs_max_clients_count, bs_area_radius, log)
 
-scouting_area = hive.set_scouting_area(bs_area_radius)
+
+
+
+log.msg("run".upper(), "clients_list items count: " + str(len(hive.clients_list)))
+log.msg("run".upper(), "clients_list: " + str(hive.clients_list))
 
 bees = [bee(hive, log) for i in range(bees_count)]
-for bee in bees:
-    bee.set_bee_location(scouting_area)
+while len(hive.clients_list) > 0:
+    bee.location = []
+    bee.local_extremum = {}
+    hive.global_extremum = {}
+    scouting_area = hive.set_scouting_area(bs_area_radius)
+    for _ in range(max_retries_count):
+        for bee in bees:
+            bee.scout(scouting_area)
+    bee.set_bs_location(hive.global_extremum)
+    for key, value in bee.clients_in_area_list.items():
+        hive.modify_clients_list({key: value})
+        log.msg("run".upper(), "deleted client from clients_list: " + str({key: value}))
+    log.msg("run".upper(), "cleaned_clients_list items count: " + str(len(hive.clients_list)))
+    bee.clients_in_area_list = {}
+    log.msg("run".upper(), "\n############### END OF ITERATION ###############\n")
+    
+log.msg("run".upper(), "bs_locations_list: {")
+for key, value in hive.bs_locations_list.items():
+    log.msg("run".upper(), str(key)+" : "+str(value))
+
 
 ###
 # TEST

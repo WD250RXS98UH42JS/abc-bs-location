@@ -1,6 +1,7 @@
 import os
 import sys
 import random
+import math
 from datetime import datetime, time
 
 class log:
@@ -8,7 +9,7 @@ class log:
     Class 'logs' manages any events occured during program execution.
     """
 
-    def __init__(self, log_file):
+    def __init__(self, log_file, verbose):
         # Get current time and set it as program starting time
         self.start_time = datetime.now()
         # Get full path to log file (including it's name)
@@ -17,6 +18,7 @@ class log:
         self.log_file_path = log_file.rsplit("/", 1)[0]
         # Get log filename
         self.log_file_name = log_file.rsplit("/", 1)[1]
+        self.verbose = verbose
 
         # Check if log directory already exists
         if not os.path.isdir('./'+self.log_file_path):
@@ -45,8 +47,12 @@ class log:
                   object + "\t" + \
                   message + "\t" + \
                   " Seconds passed in total: " + str(seconds_left) + "\n"
-        # Print log message
-        print(log_msg)
+        # Check log verbosity level
+        if (self.verbose == 0 and log_type == "STAT") or \
+        (self.verbose == 1 and log_type in ["STAT", "ERR", "WARN"]) or \
+        (self.verbose == 2):
+            # Print log message
+            print(log_msg)
         # Open log file in 'A+ (append)' mode and write log entry to it
         with open(self.log_file, 'a+') as file:
             file.write(log_msg)
@@ -82,55 +88,31 @@ class log:
         # Return __execute_log_data() execution as result
         return self.__execute_log_data(log_type, object, message)
 
-class field:
-    """
-    Class 'field' represents the whole area that able to locate clients. This area is rectangle
-    with coords defined in run.py as that variables:
-    start_width_pos - X-coord of starting point (left-bottom corner of field)
-    start_height_pos - Y-coord of starting point (left-bottom corner of field)
-    field_height - field height started from start_height_pos (on Y axle)
-    field_width - field width started from start_width_pos (on X axle)
-    """
+    def stat(self, object, message):
+        # Shows log type
+        log_type = "STAT"
+        # Return __execute_log_data() execution as result
+        return self.__execute_log_data(log_type, object, message)
 
-    def __init__(self, width, height, start_width_pos, start_height_pos, log):
-        # Field width
+class field:
+
+    def __init__(self, width, height, log):
         self.width = width
-        # Field height
         self.height = height
-        # Field width start point coord
-        self.start_width_pos = start_width_pos
-        # Field height start point coord
-        self.start_height_pos = start_height_pos
-        # Clients list variable definition
         self.clients_list = {}
-        # Log
         self.log = log
 
-    """
-    Takes clients count and generates clients_list with random coords that satisfy requirements
-    such as field size.
-    
-    Returns:
-        dict -- clients_list represented as dict
-        Example:
-        clients_list = {
-            1: [83948, 44689],
-            2: [49716, 94697],
-            ...
-            N: [60028, 72876]
-        }
-    """
-    def generate_clients_list(self, clients_count):
-        # Iterate over clients count to generate them all
-        for i in range(clients_count):
-            # Set random generated X-coord for current client
-            x = random.randint(self.start_width_pos, self.width)
-            # Set random generated Y-coord for current client
-            y = random.randint(self.start_height_pos, self.height)
-            # Add coords to clients_list as new client
-            self.clients_list[i] = [x, y]
-        # Create log entry
-        self.log.msg("GENERATE_CLIENTS_LIST", "clients_list was successfully generated. There are "+str(len(self.clients_list))+" new elements there.")
+    def create_clients_list(self, clients_count, clients_list):
+        if clients_list == []:
+            for i in range(clients_count):
+                x = random.randint(0, self.width)
+                y = random.randint(0, self.height)
+                self.clients_list[i] = [x, y]
+            self.log.msg("GENERATE_CLIENTS_LIST", "clients_list was successfully generated. There are "+str(len(self.clients_list))+" new elements there.")
+        else:
+            for i in range(len(clients_list)):
+                self.clients_list[i] = clients_list[i]
+            self.log.msg("GENERATE_CLIENTS_LIST", "clients_list was successfully pulled from configuration. There are "+str(len(self.clients_list))+" elements there.")
         return self.clients_list
 
 class hive:
@@ -144,26 +126,14 @@ class hive:
         self.bs_area_radius = bs_area_radius
         self.log = log
 
-    def set_scouting_area(self, bs_area_radius):
-        try:
-            client = next(iter(self.clients_list.values()))
-        except Exception:
-            self.log.msg("SET_SCOUTING_AREA", "There are no clients left in list")
-            return False
-        else:
-            start_x = client[0] - bs_area_radius
-            end_x = client[0] + bs_area_radius
-            start_y = client[1] - bs_area_radius
-            end_y = client[1] + bs_area_radius
-            # scouting_area = [[start_x, end_x], [start_y, end_y]]
-            scouting_area = {
-                "start_x" : start_x,
-                "end_x" : end_x,
-                "start_y" : start_y,
-                "end_y" : end_y
-            }
-            self.log.msg("SET_SCOUTING_AREA", "New scouting area was created: "+str(scouting_area))
-            return scouting_area
+    def set_scouting_area(self, field, bs_area_radius):
+        scouting_area = {
+            "type" : "scouting_area",
+            "area_width" : field.width,
+            "area_height" : field.height
+        }
+        self.log.msg("SET_SCOUTING_AREA", "New scouting area was created: "+str(scouting_area))
+        return scouting_area
 
     def modify_clients_list(self, element):
         key = list(element.keys())[0]
@@ -180,87 +150,98 @@ class bee:
         self.location = []
 
     def scout(self, scouting_area):
-        if not self.local_extremum and not self.hive.global_extremum:
+        self.log.msg("scout".upper(), "\n### START OF SCOUT ITERATION ###\n")
+        if self.hive.global_extremum == {}:
             self.location = self.set_new_location(scouting_area)
-            self.log.msg("scout".upper(), "location: " + str(self.location))
-            self.clients_in_area_list = {}
-            self.get_clients_in_area(self.location)
-            self.log.msg("scout".upper(), "clients_in_area: " + str(self.clients_in_area_list))
-            clients_in_area = len(self.clients_in_area_list)
-            self.log.msg("scout".upper(), "clients_in_area count: " + str(clients_in_area))
-            self.set_local_extremum(self.location, clients_in_area)
-            self.set_global_extremum(self.local_extremum)
-            self.log.msg("scout".upper(), "new_local_extremum: " + str(self.local_extremum))
-            self.log.msg("scout".upper(), "new_global_extremum: " + str(self.hive.global_extremum)+ "\n\n")
         else:
-            # self.location = self.set_new_location(self.hive.global_extremum)
-            self.location = self.set_new_location(scouting_area)
+            self.location = self.set_new_location(self.hive.global_extremum)
+        # self.clients_in_area_list = {}
+        self.get_clients_in_area(self.location)
+        clients_in_area = len(self.clients_in_area_list)
 
-            self.log.msg("scout".upper(), "location: " + str(self.location))
-            self.clients_in_area_list = {}
-            self.get_clients_in_area(self.location)
-            clients_in_area = len(self.clients_in_area_list)
+        self.log.msg("scout".upper(), "location: " + str(self.location))
+        self.log.msg("scout".upper(), "clients_in_area: " + str(self.clients_in_area_list))
+        self.log.msg("scout".upper(), "clients_in_area count: " + str(clients_in_area))
+        self.log.msg("scout".upper(), "local_extremum: " + str(self.local_extremum))
+        self.log.msg("scout".upper(), "global_extremum: " + str(self.hive.global_extremum))
 
-            self.log.msg("scout".upper(), "clients_in_area: " + str(self.clients_in_area_list))
-            self.log.msg("scout".upper(), "clients_in_area count: " + str(clients_in_area))
-            self.log.msg("scout".upper(), "local_extremum: " + str(self.local_extremum))
-            self.log.msg("scout".upper(), "global_extremum: " + str(self.hive.global_extremum))
-            
-            if self.local_extremum["clients_in_area"] < clients_in_area:
-                self.set_local_extremum(self.location, clients_in_area)
-                self.log.msg("scout".upper(), "new_local_extremum: " + str(self.local_extremum))
-                if self.local_extremum["clients_in_area"] > self.hive.global_extremum["clients_in_area"]:
-                    self.set_global_extremum(self.local_extremum)
-                    self.log.msg("scout".upper(), "new_global_extremum: " + str(self.hive.global_extremum) + "\n\n")
-        self.log.msg("scout".upper(), "\n############### END OF SCOUT ITERATION ###############\n")
-        # return self.hive.global_extremum
+        if self.local_extremum == {}:
+            self.set_local_extremum(self.location, self.clients_in_area_list)
+            self.log.msg("scout".upper(), "new_local_extremum: " + str(self.local_extremum))
+        if self.hive.global_extremum == {}:
+            self.set_global_extremum(self.local_extremum)
+            self.log.msg("scout".upper(), "new_global_extremum: " + str(self.hive.global_extremum))
 
-    def set_local_extremum(self, location, clients_in_area):
-        # self.local_extremum.clear()
+        if self.local_extremum["clients_in_area"] < clients_in_area:
+            self.set_local_extremum(self.location, self.clients_in_area_list)
+            self.log.msg("scout".upper(), "new_local_extremum: " + str(self.local_extremum))
+        if self.local_extremum["clients_in_area"] > self.hive.global_extremum["clients_in_area"]:
+            self.set_global_extremum(self.local_extremum)
+            self.log.msg("scout".upper(), "new_global_extremum: " + str(self.hive.global_extremum))
+
+        self.log.msg("scout".upper(), "\n### END OF SCOUT ITERATION ###\n")
+        return self.hive.global_extremum
+
+    def set_local_extremum(self, location, clients_in_area_list):
+        self.local_extremum["type"] = "local_extremum"
         self.local_extremum["location"] = location
-        self.local_extremum["clients_in_area"] = clients_in_area
+        self.local_extremum["clients_in_area"] = len(clients_in_area_list)
+        self.local_extremum["clients_in_area_list"] = clients_in_area_list
         return self.local_extremum
 
     def set_global_extremum(self, local_extremum):
-        # self.hive.global_extremum.clear()
-        self.hive.global_extremum["location"] = local_extremum["location"]
-        self.hive.global_extremum["clients_in_area"] = local_extremum["clients_in_area"]
+        self.hive.global_extremum = local_extremum
+        self.hive.global_extremum["type"] = "global_extremum"
         return self.hive.global_extremum
 
     def set_new_location(self, data):
-        if len(data) == 4:
-            x = random.randint(data["start_x"], data["end_x"])
-            y = random.randint(data["start_y"], data["end_y"])
-        elif len(data) == 2:
-            center_point_x = data["location"][0]
-            center_point_y = data["location"][1]
+        if data["type"] == "scouting_area":
+            from_x = 0
+            to_x = data["area_width"]
+            from_y = 0
+            to_y = data["area_height"]
+        # if data["type"] == "global_extremum":
+        else:
             radius = self.hive.bs_area_radius * 2
-            x = random.randint(center_point_x - radius, center_point_x + radius)
-            y = random.randint(center_point_y - radius, center_point_y + radius)
-        new_location = [x,y]
+            from_x = data["location"]["x"] - radius
+            if from_x < 0:
+                from_x = 0
+            to_x = data["location"]["x"] + radius
+            if to_x > self.hive.field.width:
+                to_x = self.hive.field.width
+            from_y = data["location"]["y"] - radius
+            if from_y < 0:
+                from_y = 0
+            to_y = data["location"]["y"] + radius
+            if to_y > self.hive.field.height:
+                to_y = self.hive.field.height
+
+        x = random.randint(from_x, to_x)
+        y = random.randint(from_y, to_y)
+
+        new_location = {"x": x, "y": y}
         return new_location
 
     def get_clients_in_area(self, location):
-        start_x = location[0] - self.hive.bs_area_radius
-        end_x = location[0] + self.hive.bs_area_radius
-        start_y = location[1] - self.hive.bs_area_radius
-        end_y = location[1] + self.hive.bs_area_radius
+        self.clients_in_area_list = {}
         for key, value in self.hive.clients_list.items():
-            self.log.msg("get_clients_in_area".upper(), "x: " + str(value[0]) + "; y: " + str(value[1]))
-            if value[0] in range(start_x, end_x) and value[1] in range(start_y, end_y):
+            x1 = int(location["x"])
+            x2 = int(value[0])
+            y1 = int(location["y"])
+            y2 = int(value[1])
+            range_to_client = math.sqrt(abs((x1 - x2)**2 + (y1 - y2)**2))
+            if range_to_client <= self.hive.bs_area_radius:
                 self.clients_in_area_list[key] = value
-                self.log.msg("get_clients_in_area".upper(), "client in area: " + str({key : value}))
-        # return self.clients_in_area_list
+        return self.clients_in_area_list
 
     def set_bs_location(self, global_extremum):
         key = len(self.hive.bs_locations_list)
+        global_extremum["type"] = "bs"
         value = global_extremum
         new_bs_location = {key : value}
-        if value["clients_in_area"] > 0:
+        if global_extremum["clients_in_area"] > 0:
             self.hive.bs_locations_list.update(new_bs_location)
-            self.log.msg("set_bs_location".upper(), "\n\nnew_bs_location: " + str(new_bs_location) + "\n\n")
+            self.log.msg("set_bs_location".upper(), "new_bs_location: " + str(new_bs_location) + "")
+            self.log.stat("set_bs_location".upper(), "New BS location: " + str(value["location"]) + ", clients in area: " + str(value["clients_in_area"]))
         else:
-            self.log.msg("set_bs_location".upper(), "\n\nnew_bs_location wasn't created due to 0 clients around.\n\n")
-
-    def change_clients_list(self):
-        pass
+            self.log.stat("set_bs_location".upper(), "New BS wasn't created due to 0 clients around.")

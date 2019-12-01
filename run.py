@@ -11,10 +11,10 @@ from lib import *
 verbose = 0
 
 # Count of bees per iteration
-bees_count = 5
+bees_count = 10
 
 # Max scouting retries before finishing algorithm iteration 
-max_retries_count = 5
+max_retries_count = 10
 
 # Number of clients located on field
 clients_count = 50
@@ -109,3 +109,5 @@ for key, value in hive.bs_locations_list.items():
     ": number of clients in area - " + str(value["clients_in_area"]) + \
     ", location: " + str(value["location"]) + ", clients in area: " + str(value["clients_in_area_list"]))
 ###
+
+graph = graphic(field.clients_list, hive.bs_locations_list, bs_area_radius)

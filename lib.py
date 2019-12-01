@@ -3,6 +3,7 @@ import sys
 import random
 import math
 from datetime import datetime, time
+import matplotlib.pyplot as plt
 
 class log:
     """
@@ -245,3 +246,30 @@ class bee:
             self.log.stat("set_bs_location".upper(), "New BS location: " + str(value["location"]) + ", clients in area: " + str(value["clients_in_area"]))
         else:
             self.log.stat("set_bs_location".upper(), "New BS wasn't created due to 0 clients around.")
+
+class graphic:
+
+    def __init__(self, clients_list, bs_list, bs_area_radius):
+
+        fig, ax = plt.subplots()
+        client = []
+        for key in clients_list:
+            value = clients_list[key]
+            plt.scatter(value[0], value[1], marker='.', label='Client')
+
+        for key, value in bs_list.items():
+            x = value["location"]["x"]
+            y = value["location"]["y"]
+            plt.scatter(x, y, marker='^', label='BS location')
+            bs_area = plt.Circle((x, y), bs_area_radius, alpha=0.3, label='BS area')
+            bs_area_wide = plt.Circle((x, y), bs_area_radius * 1.3, alpha=0.1, label='BS wide area')
+            ax.add_artist(bs_area)
+            # ax.add_artist(bs_area_wide)
+
+        # plt.legend(scatterpoints=1, loc='best')
+
+        ax.grid(True)
+        ax.set_xlabel('Field width', fontsize=12)
+        ax.set_ylabel('Field height', fontsize=12)
+        ax.set_title('Artificial Bee Colony algorithm to setting BS locations', fontsize=15)
+        plt.show()

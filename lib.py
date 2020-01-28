@@ -5,7 +5,7 @@ import math
 from datetime import datetime, time
 import matplotlib.pyplot as plt
 
-class log:
+class Log:
     """
     Class 'logs' manages any events occured during program execution.
     """
@@ -37,28 +37,30 @@ class log:
     Returns:
         nothing
     """
-    def __execute_log_data(self, log_type, object, message):
+    def __execute_log_data(self, log_type = "", object = "", message = ""):
         # Get current time
         current_time = datetime.now()
         # Calculate seconds left during program running
         seconds_left = (current_time - self.start_time).seconds
-        # Generate human-readable string
-        log_msg = log_type + "\t" + \
-                  str(current_time) + "\t" + \
-                  object + "\t" + \
-                  message + "\t" + \
-                  " Seconds passed in total: " + str(seconds_left) + "\n"
+
         # Check log verbosity level
-        if (self.verbose == 0 and log_type == "STAT") or \
+        if (self.verbose == -1 and log_type == "MAIN") or \
+        (self.verbose == 0 and log_type == "STAT") or \
         (self.verbose == 1 and log_type in ["STAT", "ERR", "WARN"]) or \
         (self.verbose == 2):
+            # Generate human-readable string
+            log_msg = log_type + "\t" + \
+                    str(current_time) + "\t" + \
+                    object + "\t" + \
+                    message + "\t" + \
+                    " Seconds passed in total: " + str(seconds_left) + "\n"
             # Print log message
             print(log_msg)
-        # Open log file in 'A+ (append)' mode and write log entry to it
-        with open(self.log_file, 'a+') as file:
-            file.write(log_msg)
+            # Open log file in 'A+ (append)' mode and write log entry to it
+            with open(self.log_file, 'a+') as file:
+                file.write(log_msg)
 
-    """msg(), warn(), err() methods
+    """msg(), warn(), err(), test() methods
     
     It's wrappers defined for calling log-related functions. You can pass log data in this ways:
     Message:
@@ -67,6 +69,8 @@ class log:
     log.warn("<object>", "<log message>")
     Error:
     log.err("<object>", "<log message>")
+    Test:
+    log.test("<object>", "<log message>")
 
     Returns:
         nothing
@@ -95,7 +99,19 @@ class log:
         # Return __execute_log_data() execution as result
         return self.__execute_log_data(log_type, object, message)
 
-class field:
+    def main(self, object, message):
+        # Shows log type
+        log_type = "MAIN"
+        # Return __execute_log_data() execution as result
+        return self.__execute_log_data(log_type, object, message)
+
+    def time(self):
+        # Shows log type
+        log_type = "TIME"
+        # Return __execute_log_data() execution as result
+        return self.__execute_log_data()
+
+class Field:
 
     def __init__(self, width, height, log):
         self.width = width
@@ -116,14 +132,13 @@ class field:
             self.log.msg("GENERATE_CLIENTS_LIST", "clients_list was successfully pulled from configuration. There are "+str(len(self.clients_list))+" elements there.")
         return self.clients_list
 
-class hive:
+class Hive:
 
-    def __init__(self, field, bs_max_clients_count, bs_area_radius, log):
+    def __init__(self, field, bs_area_radius, log):
         self.bs_locations_list = {}
         self.global_extremum = {}
         self.field = field
         self.clients_list = dict(self.field.clients_list)
-        self.bs_max_clients_count = bs_max_clients_count
         self.bs_area_radius = bs_area_radius
         self.log = log
 
@@ -141,7 +156,7 @@ class hive:
         if key in self.clients_list:
             del self.clients_list[key]
 
-class bee:
+class Bee:
 
     def __init__(self, hive, log):
         self.hive = hive
@@ -247,7 +262,7 @@ class bee:
         else:
             self.log.stat("set_bs_location".upper(), "New BS wasn't created due to 0 clients around.")
 
-class graphic:
+class Graphic:
 
     def __init__(self, clients_list, bs_list, bs_area_radius):
 
@@ -260,7 +275,7 @@ class graphic:
         for key, value in bs_list.items():
             x = value["location"]["x"]
             y = value["location"]["y"]
-            plt.scatter(x, y, marker='^', label='BS location')
+            # plt.scatter(x, y, marker='^', label='BS location')
             bs_area = plt.Circle((x, y), bs_area_radius, alpha=0.3, label='BS area')
             bs_area_wide = plt.Circle((x, y), bs_area_radius * 1.3, alpha=0.1, label='BS wide area')
             ax.add_artist(bs_area)
